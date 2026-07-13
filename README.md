@@ -173,22 +173,21 @@ Create the database (or let Hibernate auto-create it on first run):
 CREATE DATABASE task_manager_db;
 ```
 
-Update credentials in `src/main/resources/application.yml` if needed:
+Copy the example env file and set your values:
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/task_manager_db?createDatabaseIfNotExist=true
-    username: root
-    password: root
+```bash
+cp .env.example .env
 ```
 
-> **Important:** Replace the JWT secret before any non-local deployment.
-> ```yaml
-> security:
->   jwt:
->     secret-key: your-strong-secret-here
-> ```
+```env
+DB_URL=jdbc:mysql://localhost:3306/task_manager_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+DB_USERNAME=your_db_user
+DB_PASSWORD=your_db_password
+JWT_SECRET=your-strong-random-secret
+JWT_EXPIRATION_MS=86400000
+```
+
+> The app falls back to `root/root` and a placeholder JWT secret if no `.env` is set — fine for local dev, not for any deployed environment.
 
 Run the application:
 

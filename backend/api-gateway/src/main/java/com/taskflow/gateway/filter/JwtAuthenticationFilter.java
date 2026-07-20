@@ -50,11 +50,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         try {
             String token = authHeader.substring(7);
-            Claims claims = Jwts.parser()
-                    .verifyWith(secretKey)
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(secretKey)
                     .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+                    .parseClaimsJws(token)
+                    .getBody();
 
             ServerWebExchange mutated = exchange.mutate()
                     .request(r -> r.headers(headers -> {

@@ -1,22 +1,20 @@
-# ── Backend ───────────────────────────────────────────────────────────────────
-backend/target/
-backend/.env
-*.iml
-*.log
+# Maven
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
 
-# ── Frontend ──────────────────────────────────────────────────────────────────
-frontend/node_modules/
-frontend/dist/
-frontend/.env.local
-frontend/tsconfig.app.tsbuildinfo
-frontend/tsconfig.node.tsbuildinfo
-frontend/vite.config.d.ts
-frontend/vite.config.js
+# Node
+**/node_modules/
+**/dist/
+**/.env
 
-# ── IDE ───────────────────────────────────────────────────────────────────────
+# IDE
 .idea/
 .vscode/
+*.iml
 
-# ── OS ────────────────────────────────────────────────────────────────────────
+# OS
 .DS_Store
 Thumbs.db
+
+# Docker
+*.log

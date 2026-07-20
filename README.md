@@ -1,288 +1,245 @@
-# Enterprise Task Management System
+# TaskFlow — Enterprise Task Management Platform
 
-A full-stack task management platform built with Spring Boot 3 and React 18. Designed for teams that need role-based project and task tracking with a clean REST API and a responsive UI.
-
----
-
-## Overview
-
-This system allows organizations to manage projects, tasks, users, and notifications across three roles — Admin, Manager, and Employee. The backend exposes a secured REST API documented via Swagger. The frontend is a single-page application that consumes that API.
-
-The AI module is currently scaffolded with a mock provider. It is designed to be swapped with a real provider (e.g. AWS Bedrock) without changing the rest of the codebase.
+A production-grade microservices platform built with **Java 21 + Spring Boot 3 + React 18**.
 
 ---
 
 ## Architecture
 
 ```
-task-manager/
-├── backend/     # Spring Boot 3 REST API
-└── frontend/    # React 18 SPA (Vite + TypeScript)
+                        ┌─────────────────────────────────────────┐
+  React SPA (port 3000) │           API Gateway (port 8080)        │
+  Redux Toolkit         │   Spring Cloud Gateway + JWT Validation   │
+  React Query           │   Routes + CORS + Header Propagation      │
+  Material UI           └──────────────┬──────────────────────────┘
+                                        │
+              ┌─────────────────────────┼──────────────────────────┐
+              │                         │                          │
+   ┌──────────▼──────┐    ┌─────────────▼──────┐    ┌─────────────▼──────┐
+   │  Auth Service   │    │   User Service      │    │   Task Service     │
+   │  (port 8081)    │    │   (port 8082)       │    │   (port 8083)      │
+   │  JWT issuance   │    │   User CRUD         │    │   Projects + Tasks │
+   │  Register/Login │    │   Profile           │    │   Comments         │
+   │  auth_db        │    │   user_db           │    │   task_db          │
+   └─────────────────┘    └─────────────────────┘    └────────────────────┘
+                                                                    │
+                                                       ┌────────────▼───────┐
+                                                       │ Notification Svc   │
+                                                       │ (port 8084)        │
+                                                       │ Per-user inbox     │
+                                                       │ notification_db    │
+                                                       └────────────────────┘
 ```
 
-The two sides are fully decoupled. The frontend communicates with the backend over HTTP using JWT tokens for authentication. They can be deployed independently.
+### Key Design Decisions
 
-```
-[React SPA]  ──HTTP/JSON──▶  [Spring Boot API]  ──JPA──▶  [MySQL]
-                                     │
-                              [JWT Auth Filter]
-                                     │
-                              [AI Service Layer]
-                              (mock / pluggable)
+| Concern | Approach |
+|---|---|
+| Auth | JWT issued by auth-service, validated at gateway, propagated as `X-User-*` headers |
+| DB isolation | Each service owns its own PostgreSQL database |
+| Schema management | Flyway migrations per service (`db/migration/V*.sql`) |
+| Security | Gateway validates JWT; downstream services trust gateway headers via `GatewayAuthFilter` |
+| Transactions | `@Transactional` on all service methods; read-only where applicable |
+| Pagination | Server-side via Spring Data `Pageable` on all list endpoints |
+| Filtering | JPQL `@Query` with optional parameters on all repositories |
+| Error handling | `@RestControllerAdvice` + `ErrorResponse` record per service |
+| Auditing | `@EntityListeners(AuditingEntityListener.class)` + `@EnableJpaAuditing` |
+
+---
+
+## Services
+
+| Service | Port | Database | Responsibilities |
+|---|---|---|---|
+| api-gateway | 8080 | — | Routing, JWT validation, CORS |
+| auth-service | 8081 | auth_db | Register, login, JWT issuance |
+| user-service | 8082 | user_db | User CRUD, profile management |
+| task-service | 8083 | task_db | Projects, tasks, comments |
+| notification-service | 8084 | notification_db | Per-user notifications |
+| frontend | 3000/80 | — | React SPA |
+
+---
+
+## Quick Start (Docker)
+
+```bash
+# 1. Copy and configure environment
+cp .env.example .env
+
+# 2. Build all service JARs
+build-all.cmd
+
+# 3. Start everything
+docker-compose up --build
+
+# Frontend → http://localhost:3000
+# Gateway  → http://localhost:8080
+# Swagger  → http://localhost:8081/swagger-ui.html  (auth)
+#            http://localhost:8082/swagger-ui.html  (users)
+#            http://localhost:8083/swagger-ui.html  (tasks)
+#            http://localhost:8084/swagger-ui.html  (notifications)
 ```
 
 ---
 
-## Features
-
-**Backend**
-- JWT-based authentication and stateless session management
-- Role-based access control: `ADMIN`, `MANAGER`, `EMPLOYEE`
-- Full CRUD for Projects, Tasks, Comments, and Users
-- Notification system per user
-- Centralized exception handling with consistent error responses
-- Input validation via Bean Validation
-- Pluggable AI service layer (mock provider included)
-- Swagger UI for interactive API exploration
-
-**Frontend**
-- Authentication flow with protected routes
-- Dashboard, Projects, and Tasks pages
-- Form validation with React Hook Form + Zod
-- Axios-based API client with auth token injection
-- Tailwind CSS for styling
-
----
-
-## Folder Structure
-
-```
-task-manager/
-│
-├── backend/
-│   ├── src/main/java/com/example/taskmanager/
-│   │   ├── ai/              # AI service abstraction + mock provider
-│   │   ├── config/          # Security and OpenAPI configuration
-│   │   ├── controller/      # REST controllers
-│   │   ├── dto/
-│   │   │   ├── request/     # Incoming payloads
-│   │   │   └── response/    # Outgoing payloads
-│   │   ├── entity/          # JPA entities (User, Task, Project, Comment, Notification)
-│   │   ├── exception/       # Custom exceptions + GlobalExceptionHandler
-│   │   ├── mapper/          # Entity ↔ DTO mappers
-│   │   ├── repository/      # Spring Data JPA repositories
-│   │   ├── security/        # JWT filter and token provider
-│   │   ├── service/         # Business logic
-│   │   └── TaskManagerApplication.java
-│   ├── src/main/resources/
-│   │   └── application.yml
-│   ├── src/test/            # Unit tests (service + controller + security)
-│   └── pom.xml
-│
-└── frontend/
-    ├── src/
-    │   ├── components/      # Shared UI components and ProtectedRoute
-    │   ├── context/         # AuthContext
-    │   ├── features/        # Feature-scoped API clients and types
-    │   │   ├── auth/
-    │   │   ├── notifications/
-    │   │   ├── projects/
-    │   │   └── tasks/
-    │   ├── hooks/           # useAuth, useTasks, useProjects, useApi
-    │   ├── layouts/         # AppLayout
-    │   ├── pages/           # Route-level page components
-    │   ├── routes/          # Route definitions
-    │   ├── services/        # Axios instance and auth service
-    │   └── types/           # Shared TypeScript types
-    ├── index.html
-    ├── package.json
-    └── vite.config.ts
-```
-
----
-
-## API Documentation
-
-All endpoints are prefixed with `/api`.
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/api/auth/register` | Register a new user | Public |
-| POST | `/api/auth/login` | Authenticate and receive JWT | Public |
-| GET | `/api/projects` | List all projects | Required |
-| POST | `/api/projects` | Create a project | MANAGER, ADMIN |
-| GET | `/api/projects/{id}` | Get project by ID | Required |
-| PUT | `/api/projects/{id}` | Update a project | MANAGER, ADMIN |
-| DELETE | `/api/projects/{id}` | Delete a project | ADMIN |
-| GET | `/api/tasks` | List all tasks | Required |
-| POST | `/api/tasks` | Create a task | MANAGER, ADMIN |
-| GET | `/api/tasks/{id}` | Get task by ID | Required |
-| PUT | `/api/tasks/{id}` | Update a task | Required |
-| DELETE | `/api/tasks/{id}` | Delete a task | ADMIN |
-| GET | `/api/tasks/{id}/comments` | List comments on a task | Required |
-| POST | `/api/tasks/{id}/comments` | Add a comment | Required |
-| GET | `/api/notifications` | Get current user notifications | Required |
-| GET | `/api/users` | List users | ADMIN |
-| GET | `/api/profile` | Get current user profile | Required |
-| PUT | `/api/profile` | Update current user profile | Required |
-| POST | `/api/ai/generate-description` | Generate task description (mock) | Required |
-| POST | `/api/ai/suggest-priority` | Suggest task priority (mock) | Required |
-| POST | `/api/ai/summarize` | Summarize task content (mock) | Required |
-| GET | `/api/health` | Health check | Public |
-
-> All protected endpoints require the header: `Authorization: Bearer <token>`
-
----
-
-## Swagger UI
-
-Once the backend is running, the full interactive API documentation is available at:
-
-```
-http://localhost:8080/swagger-ui.html
-```
-
-The raw OpenAPI spec is at:
-
-```
-http://localhost:8080/v3/api-docs
-```
-
----
-
-## Installation
+## Quick Start (Local Dev)
 
 ### Prerequisites
+- Java 21, Maven 3.9+
+- Node.js 20+
+- PostgreSQL 16 running locally
 
-- Java 21
-- Maven 3.9+
-- Node.js 18+
-- MySQL 8+
-
----
-
-### Backend
+### Backend services (run each in a separate terminal)
 
 ```bash
-cd backend
+# Create databases first
+psql -U postgres -c "CREATE DATABASE auth_db;"
+psql -U postgres -c "CREATE DATABASE user_db;"
+psql -U postgres -c "CREATE DATABASE task_db;"
+psql -U postgres -c "CREATE DATABASE notification_db;"
+
+# Auth service
+cd auth-service && mvn spring-boot:run
+
+# User service
+cd user-service && mvn spring-boot:run
+
+# Task service
+cd task-service && mvn spring-boot:run
+
+# Notification service
+cd notification-service && mvn spring-boot:run
+
+# API Gateway
+cd api-gateway && mvn spring-boot:run
 ```
-
-Create the database (or let Hibernate auto-create it on first run):
-
-```sql
-CREATE DATABASE task_manager_db;
-```
-
-Copy the example env file and set your values:
-
-```bash
-cp .env.example .env
-```
-
-```env
-DB_URL=jdbc:mysql://localhost:3306/task_manager_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
-DB_USERNAME=your_db_user
-DB_PASSWORD=your_db_password
-JWT_SECRET=your-strong-random-secret
-JWT_EXPIRATION_MS=86400000
-```
-
-> The app falls back to `root/root` and a placeholder JWT secret if no `.env` is set — fine for local dev, not for any deployed environment.
-
-Run the application:
-
-```bash
-mvn spring-boot:run
-```
-
-The API will be available at `http://localhost:8080`.
-
----
 
 ### Frontend
 
 ```bash
 cd frontend
 npm install
+cp .env.example .env
 npm run dev
+# → http://localhost:3000
 ```
-
-The UI will be available at `http://localhost:5173`.
-
-By default, the frontend expects the backend at `http://localhost:8080`. Update the base URL in `src/services/api.ts` if your backend runs elsewhere.
 
 ---
 
-### Running Tests
+## Running Tests
 
 ```bash
-cd backend
-mvn test
+# All services at once
+test-all.cmd
+
+# Individual service (unit + integration via Testcontainers)
+cd auth-service && mvn test
+cd user-service && mvn test
+cd task-service && mvn test
+cd notification-service && mvn test
 ```
 
----
-
-## Screenshots
-
-> _Screenshots will be added once the UI is finalized._
-
-| Page | Description |
-|------|-------------|
-| Login / Register | Authentication page |
-| Dashboard | Overview of projects and tasks |
-| Projects | Project list and detail view |
-| Tasks | Task list, detail, and comment thread |
+Testcontainers spins up a real PostgreSQL container for integration tests — no manual DB setup needed.
 
 ---
 
-## AI Integration
+## API Reference
 
-The backend includes an `AiService` backed by a pluggable `AiProvider` interface. The current implementation is a `MockAiProvider` that returns static responses — no external API calls, no credentials required.
+All requests go through the gateway at `http://localhost:8080`.
 
-**Supported operations (mock):**
-- `POST /api/ai/generate-description` — generate a task description from a title
-- `POST /api/ai/suggest-priority` — suggest a priority level for a task
-- `POST /api/ai/summarize` — summarize task content
+### Auth (public)
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/auth/register` | Register new user, returns JWT |
+| POST | `/api/auth/login` | Login, returns JWT |
 
-**To connect a real provider:**
+### Users (requires JWT)
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/users` | ADMIN |
+| GET | `/api/users/{id}` | ADMIN, MANAGER |
+| POST | `/api/users` | ADMIN |
+| PUT | `/api/users/{id}` | ADMIN |
+| DELETE | `/api/users/{id}` | ADMIN |
+| GET | `/api/profile` | Any |
+| PUT | `/api/profile` | Any |
 
-1. Implement the `AiProvider` interface in a new class (e.g. `BedrockAiProvider`)
-2. Register it as a Spring bean
-3. Update `ai.provider` in `application.yml`
-4. Add the required credentials/config
+### Projects (requires JWT)
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/projects` | Any |
+| GET | `/api/projects/{id}` | Any |
+| POST | `/api/projects` | MANAGER, ADMIN |
+| PUT | `/api/projects/{id}` | MANAGER, ADMIN |
+| DELETE | `/api/projects/{id}` | ADMIN |
 
-The rest of the codebase does not need to change. AWS Bedrock is a natural fit given the Spring Boot stack, but the interface is provider-agnostic.
+### Tasks (requires JWT)
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/tasks` | Any |
+| GET | `/api/tasks/{id}` | Any |
+| POST | `/api/tasks` | MANAGER, ADMIN |
+| PUT | `/api/tasks/{id}` | Any |
+| PATCH | `/api/tasks/{id}/assign` | MANAGER, ADMIN |
+| DELETE | `/api/tasks/{id}` | ADMIN |
+| GET | `/api/tasks/{id}/comments` | Any |
+| POST | `/api/tasks/{id}/comments` | Any |
+| DELETE | `/api/tasks/{id}/comments/{cid}` | Author or ADMIN |
+
+### Notifications (requires JWT)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/notifications` | Current user's notifications |
+| GET | `/api/notifications/unread-count` | Unread badge count |
+| PATCH | `/api/notifications/{id}/read` | Mark one as read |
+| PATCH | `/api/notifications/read-all` | Mark all as read |
 
 ---
 
-## Roadmap
+## Query Parameters (Pagination + Filtering)
 
-- [ ] Connect AI endpoints to a real provider (AWS Bedrock)
-- [ ] File attachments on tasks
-- [ ] Real-time notifications via WebSocket
-- [ ] Activity/audit log per project
-- [ ] Pagination and filtering on task and project list endpoints
-- [ ] Docker Compose setup for local development
-- [ ] CI/CD pipeline configuration
-- [ ] Frontend unit and integration tests
+All list endpoints support:
+
+| Param | Default | Description |
+|---|---|---|
+| `page` | 0 | Zero-based page number |
+| `size` | 20 | Items per page |
+| `sortBy` | `createdAt` | Field to sort by |
+| `dir` | `desc` | `asc` or `desc` |
+| `keyword` | — | Full-text search on name/title/description |
+| `status` | — | Filter by status enum value |
+| `priority` | — | Filter by priority (tasks only) |
+| `projectId` | — | Filter tasks by project |
+| `assigneeId` | — | Filter tasks by assignee |
 
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Backend | Java 21, Spring Boot 3.3, Spring Security, Spring Data JPA |
-| Database | MySQL 8 |
+|---|---|
+| Language | Java 21 (records, sealed classes, text blocks) |
+| Framework | Spring Boot 3.3, Spring Security, Spring Data JPA |
+| Gateway | Spring Cloud Gateway 2023.0 |
+| Database | PostgreSQL 16 |
+| Migrations | Flyway 10 |
 | Auth | JWT (jjwt 0.12) |
 | API Docs | SpringDoc OpenAPI 2.5 / Swagger UI |
+| Testing | JUnit 5, Mockito, Testcontainers |
 | Frontend | React 18, TypeScript, Vite 5 |
-| Styling | Tailwind CSS 3 |
+| State | Redux Toolkit 2 |
+| Data Fetching | TanStack React Query 5 |
+| UI | Material UI 5, MUI DataGrid |
 | Forms | React Hook Form + Zod |
-| HTTP Client | Axios |
+| HTTP | Axios |
+| Container | Docker, Docker Compose |
 
 ---
 
-## License
+## Roles
 
-MIT
+| Role | Capabilities |
+|---|---|
+| `EMPLOYEE` | Read projects/tasks, update own tasks, add comments, view notifications |
+| `MANAGER` | All EMPLOYEE + create/update projects and tasks, assign tasks |
+| `ADMIN` | All MANAGER + delete anything, manage users |

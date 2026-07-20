@@ -1,0 +1,46 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: task-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/task_db}
+    username: ${DB_USERNAME:taskflow}
+    password: ${DB_PASSWORD:taskflow}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+jwt:
+  secret: ${JWT_SECRET:change-me-in-production-min-32-chars!!}
+
+user-service:
+  url: ${USER_SERVICE_URL:http://localhost:8082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.taskflow: DEBUG

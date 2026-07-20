@@ -1,29 +1,40 @@
 {
-  "name": "task-manager-ui",
+  "name": "taskflow-ui",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src --ext ts,tsx"
   },
   "dependencies": {
-    "@hookform/resolvers": "^3.4.0",
+    "@emotion/react": "^11.13.0",
+    "@emotion/styled": "^11.13.0",
+    "@hookform/resolvers": "^3.9.0",
+    "@mui/icons-material": "^5.16.7",
+    "@mui/material": "^5.16.7",
+    "@mui/x-data-grid": "^7.13.0",
+    "@reduxjs/toolkit": "^2.2.7",
+    "@tanstack/react-query": "^5.51.23",
+    "@tanstack/react-query-devtools": "^5.51.23",
     "axios": "^1.7.2",
+    "notistack": "^3.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-hook-form": "^7.23.1",
-    "react-router-dom": "^6.21.0",
-    "zod": "^3.23.1"
+    "react-hook-form": "^7.52.2",
+    "react-redux": "^9.1.2",
+    "react-router-dom": "^6.26.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.16",
+    "autoprefixer": "^10.5.4",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   }

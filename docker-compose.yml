@@ -1,0 +1,126 @@
+version: '3.9'
+
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskflow-postgres
+    environment:
+      POSTGRES_USER: taskflow
+      POSTGRES_PASSWORD: taskflow
+      POSTGRES_MULTIPLE_DATABASES: auth_db,user_db,task_db,notification_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: taskflow-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Services ─────────────────────────────────────────────────────────────────
+
+  api-gateway:
+    build: ./backend/api-gateway
+    container_name: taskflow-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      TASK_SERVICE_URL: http://task-service:8083
+      NOTIFICATION_SERVICE_URL: http://notification-service:8084
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-chars!!}
+    depends_on:
+      - auth-service
+      - user-service
+      - task-service
+      - notification-service
+
+  auth-service:
+    build: ./backend/auth-service
+    container_name: taskflow-auth
+    ports:
+      - "8081:8081"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/auth_db
+      DB_USERNAME: taskflow
+      DB_PASSWORD: taskflow
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-chars!!}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  user-service:
+    build: ./backend/user-service
+    container_name: taskflow-users
+    ports:
+      - "8082:8082"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/user_db
+      DB_USERNAME: taskflow
+      DB_PASSWORD: taskflow
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-chars!!}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  task-service:
+    build: ./backend/task-service
+    container_name: taskflow-tasks
+    ports:
+      - "8083:8083"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/task_db
+      DB_USERNAME: taskflow
+      DB_PASSWORD: taskflow
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-chars!!}
+      USER_SERVICE_URL: http://user-service:8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notification-service:
+    build: ./backend/notification-service
+    container_name: taskflow-notifications
+    ports:
+      - "8084:8084"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/notification_db
+      DB_USERNAME: taskflow
+      DB_PASSWORD: taskflow
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-chars!!}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: taskflow-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+
+volumes:
+  postgres_data:

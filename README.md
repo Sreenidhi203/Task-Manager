@@ -243,3 +243,14 @@ All list endpoints support:
 | `EMPLOYEE` | Read projects/tasks, update own tasks, add comments, view notifications |
 | `MANAGER` | All EMPLOYEE + create/update projects and tasks, assign tasks |
 | `ADMIN` | All MANAGER + delete anything, manage users |
+
+## Environment variables (required)
+
+Set these in your local `.env` (do not commit secrets):
+
+- `JWT_SECRET`: strong secret (min 32 bytes) used to sign JWTs
+- `JWT_EXPIRATION_MS`: token TTL in milliseconds (default `86400000`)
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`: per-service database credentials
+- `cors.allowed-origins` (gateway): comma-separated allowed origins (e.g. `http://localhost:3000`)
+
+Keep real secrets out of source control — use `.env` and CI/CD secret stores.
